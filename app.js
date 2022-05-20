@@ -1,54 +1,10 @@
-// Sequelize - это ORM-библиотека для приложений на Node.js
-// При использовании Sequelize мы можем не писать SQL-запросы, а работать с данными как с обычными объектами. 
-// Причем Sequelize может работать с рядом СУБД - MySQL, Postgres, MariaDB, SQLite, MS SQL Server.
-// Для свойства dialect 
-// mysql
-// mariadb
-// sqlite
-// postgres
-// mssql
-// Ключевым компонентом в работе Sequelize с бд являются модели.
-// ! метода define()
-// const User = sequelize.define("user", {
-//   id: {
-//     type: Sequelize.INTEGER,
-//     autoIncrement: true,
-//     primaryKey: true,
-//     allowNull: false
-//   },
-//   name: {
-//     type: Sequelize.STRING,
-//     allowNull: false
-//   },
-//   age: {
-//     type: Sequelize.INTEGER,
-//     allowNull: false
-//   }
-// });
-//!  Второй способ определения модели:
-// class User extends Model {}
-// User.init({
-//   id: {
-//     type: Sequelize.INTEGER,
-//     autoIncrement: true,
-//     primaryKey: true,
-//     allowNull: false
-//   },
-//   name: {
-//     type: Sequelize.STRING,
-//     allowNull: false
-//   },
-//   age: {
-//     type: Sequelize.INTEGER,
-//     allowNull: false
-//   }
-// }, {
-//   sequelize,
-//   modelName: "user"
-// });
-
-//! примере модели
 const Sequelize = require("sequelize");
+const express = require("express");
+ 
+const app = express();
+const urlencodedParser = express.urlencoded({extended: false});
+ 
+// определяем объект Sequelize
 const sequelize = new Sequelize("usersdb", "root", "root", {
   dialect: "mysql",
   host: "localhost",
@@ -57,6 +13,8 @@ const sequelize = new Sequelize("usersdb", "root", "root", {
     timestamps: false
   }
 });
+ 
+// определяем модель User
 const User = sequelize.define("user", {
   id: {
     type: Sequelize.INTEGER,
@@ -73,69 +31,71 @@ const User = sequelize.define("user", {
     allowNull: false
   }
 });
-sequelize.sync().then(result=>console.log(result))
-.catch(err=> console.log(err));
-
-
-//! Добавление данных
-
-User.create({
-  name: "Tom",
-  age: 35
-}).then(res=>{
-  console.log(res);
+ 
+app.set("view engine", "hbs");
+ 
+// синхронизация с бд, после успшной синхронизации запускаем сервер
+sequelize.sync().then(()=>{
+  app.listen(3000, function(){
+    console.log("Сервер ожидает подключения...");
+  });
 }).catch(err=>console.log(err));
-
-User.create({
-  name: "Bob",
-  age: 31
-}).then(res=>{
-  const user = {id: res.id, name: res.name, age: res.age}
-  console.log(user);
-}).catch(err=>console.log(err));
-
-// !Получение данных
-User.findAll({raw:true}).then(users=>{
-  console.log(users);
-}).catch(err=>console.log(err));
-
-//! Простейшая фильтрация
-User.findAll({where:{name: "Tom"}, raw: true })
-.then(users=>{
-  console.log(users);
-}).catch(err=>console.log(err));
-
-// !Получение одного объекта findByPk() (получает объект по первичному ключу)
-User.findByPk(2)
-.then(user=>{
-    if(!user) return; // если пользователь не найден
-    console.log(user.name);
-}).catch(err=>console.log(err));
-
-//! Получение одного объекта findOne()
-
-User.findOne({where: {name: "Tom"}})
-.then(user=>{
-    if(!user) return;
-    console.log(user.name, user.age);
-}).catch(err=>console.log(err));
-
-//! Для обновления применяется метод update()
-
-User.update({ age: 36 }, {
-  where: {
-    name: "Bob"
-  }
-}).then((res) => {
-  console.log(res);
+ 
+// получение данных
+app.get("/", function(req, res){
+    User.findAll({raw: true }).then(data=>{
+      res.render("index.hbs", {
+        users: data
+      });
+    }).catch(err=>console.log(err));
 });
-
-//!Для удаления используется метод destroy()
-
-User.destroy({
-  where: {
-    name: "Bob"
-  }
-}).then((res) => {
-  console.log(res);
+ 
+app.get("/create", function(req, res){
+    res.render("create.hbs");
+});
+ 
+// добавление данных
+app.post("/create", urlencodedParser, function (req, res) {
+         
+    if(!req.body) return res.sendStatus(400);
+         
+    const username = req.body.name;
+    const userage = req.body.age;
+    User.create({ name: username, age: userage}).then(()=>{
+      res.redirect("/");
+    }).catch(err=>console.log(err));
+});
+ 
+// получаем объект по id для редактирования
+app.get("/edit/:id", function(req, res){
+  const userid = req.params.id;
+  User.findAll({where:{id: userid}, raw: true })
+  .then(data=>{
+    res.render("edit.hbs", {
+      user: data[0]
+    });
+  })
+  .catch(err=>console.log(err));
+});
+ 
+// обновление данных в БД
+app.post("/edit", urlencodedParser, function (req, res) {
+         
+  if(!req.body) return res.sendStatus(400);
+ 
+  const username = req.body.name;
+  const userage = req.body.age;
+  const userid = req.body.id;
+  User.update({name:username, age: userage}, {where: {id: userid} }).then(() => {
+    res.redirect("/");
+  })
+  .catch(err=>console.log(err));
+});
+ 
+// удаление данных
+app.post("/delete/:id", function(req, res){  
+  const userid = req.params.id;
+  User.destroy({where: {id: userid} }).then(() => {
+    res.redirect("/");
+  }).catch(err=>console.log(err));
 });
