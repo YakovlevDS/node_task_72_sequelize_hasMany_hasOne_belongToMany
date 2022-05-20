@@ -1,21 +1,20 @@
+
+ 
+// !Связь один-ко-многим  Sequelize применяется метод hasMany()
+// может производить множество товаров. То есть мы имеем отношение одни-ко-многим (1 компания - много товаров). 
+ 
 const Sequelize = require("sequelize");
-const express = require("express");
  
-const app = express();
-const urlencodedParser = express.urlencoded({extended: false});
- 
-// определяем объект Sequelize
-const sequelize = new Sequelize("usersdb", "root", "root", {
-  dialect: "mysql",
-  host: "localhost",
-  port:3307,
-  define: {
-    timestamps: false
-  }
+const sequelize = new Sequelize("store", "root", "root", {
+    dialect: "mysql",
+    host: "localhost",
+    port:3307,
+    define: {
+      timestamps: false
+    }
 });
  
-// определяем модель User
-const User = sequelize.define("user", {
+const Product = sequelize.define("product", {
   id: {
     type: Sequelize.INTEGER,
     autoIncrement: true,
@@ -26,76 +25,59 @@ const User = sequelize.define("user", {
     type: Sequelize.STRING,
     allowNull: false
   },
-  age: {
+  price: {
     type: Sequelize.INTEGER,
     allowNull: false
   }
 });
  
-app.set("view engine", "hbs");
+const Company = sequelize.define("company", {
+  id: {
+    type: Sequelize.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+    allowNull: false
+  },
+  name: {
+    type: Sequelize.STRING,
+    allowNull: false
+  }
+});
+Company.hasMany(Product);
  
-// синхронизация с бд, после успшной синхронизации запускаем сервер
-sequelize.sync().then(()=>{
-  app.listen(3000, function(){
-    console.log("Сервер ожидает подключения...");
-  });
+sequelize.sync({force:true}).then(()=>{
+  console.log("Tables have been created");
 }).catch(err=>console.log(err));
- 
-// получение данных
-app.get("/", function(req, res){
-    User.findAll({raw: true }).then(data=>{
-      res.render("index.hbs", {
-        users: data
-      });
-    }).catch(err=>console.log(err));
-});
- 
-app.get("/create", function(req, res){
-    res.render("create.hbs");
-});
- 
-// добавление данных
-app.post("/create", urlencodedParser, function (req, res) {
-         
-    if(!req.body) return res.sendStatus(400);
-         
-    const username = req.body.name;
-    const userage = req.body.age;
-    User.create({ name: username, age: userage}).then(()=>{
-      res.redirect("/");
-    }).catch(err=>console.log(err));
-});
- 
-// получаем объект по id для редактирования
-app.get("/edit/:id", function(req, res){
-  const userid = req.params.id;
-  User.findAll({where:{id: userid}, raw: true })
-  .then(data=>{
-    res.render("edit.hbs", {
-      user: data[0]
-    });
+
+
+//создаем одну компанию
+Company.create({ name: "Apple"}).then(res=>{
+     
+  // получаем id созданной компании
+  const compId = res.id;
+  //создаем пару товаров для этой компании
+  Product.create({name:"iPhone XS", price: 400, companyId: compId}).catch(err=>console.log(err));
+  Product.create({name:"iPhone XR", price: 350, companyId: compId}).catch(err=>console.log(err));
+   
+}).catch(err=>console.log(err));
+
+
+// найдем компанию с id=1
+Company.findByPk(1).then(company=>{
+  if(!company) return console.log("Company not found");
+  console.log(company);
+  // и добавим для нее один объект
+  company.createProduct({name:"iPhone X", price: 300,}).catch(err=>console.log(err));
+}).catch(err=>console.log(err));
+
+//! Например, получим все товары компании с id=1:
+Company.findByPk(1).then(company=>{
+   
+  if(!company) return console.log("Company not found");
+  company.getProducts()
+  .then(res=>{
+    for(let i=0; i<res.length;i++)
+      console.log(res[i].name, " - ", company.name);
   })
   .catch(err=>console.log(err));
-});
- 
-// обновление данных в БД
-app.post("/edit", urlencodedParser, function (req, res) {
-         
-  if(!req.body) return res.sendStatus(400);
- 
-  const username = req.body.name;
-  const userage = req.body.age;
-  const userid = req.body.id;
-  User.update({name:username, age: userage}, {where: {id: userid} }).then(() => {
-    res.redirect("/");
-  })
-  .catch(err=>console.log(err));
-});
- 
-// удаление данных
-app.post("/delete/:id", function(req, res){  
-  const userid = req.params.id;
-  User.destroy({where: {id: userid} }).then(() => {
-    res.redirect("/");
-  }).catch(err=>console.log(err));
-});
+}).catch(err=>console.log(err));
